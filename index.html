@@ -80,7 +80,7 @@
   .rule{height:1.5px;background:var(--ink);opacity:.9;margin-bottom:14px}
 
   .stations{display:grid;grid-template-columns:1fr;gap:16px}
-  @media(min-width:760px){.stations{grid-template-columns:1fr 1fr}}
+  /* stations always stacked (Charlotte over Fairview) */
   .station{border:1.3px solid var(--ink);border-radius:6px;background:var(--card);overflow:hidden;box-shadow:3px 3px 0 rgba(27,36,23,.08)}
   .st-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;background:var(--paper-2);border-bottom:1.2px solid var(--ink)}
   .st-id{display:flex;align-items:center;gap:9px}
@@ -120,6 +120,13 @@
   .band .stat b{color:var(--ink)}
   .band .region-note{font-size:12px;color:var(--ink-soft);margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}
   .band .region-note b{color:var(--ink)}
+  .dchart{margin-top:11px;padding-top:9px;border-top:1px dashed var(--line)}
+  .dchart-lg{display:flex;gap:16px;font-family:'IBM Plex Mono';font-size:9.5px;color:var(--ink-soft);margin-bottom:1px}
+  .dchart-lg i{display:inline-block;vertical-align:middle;margin-right:4px}
+  .dchart-lg i.tl{width:13px;height:0;border-top:2px solid var(--rust)}
+  .dchart-lg i.pl{width:11px;height:8px;background:var(--sky);opacity:.35;border-radius:1px}
+  .dsvg{display:block;max-width:420px}
+  .dsvg .cx,.dsvg .cy{font-family:'IBM Plex Mono';font-size:8px;fill:var(--ink-soft)}
 
   .season-band{border:1.3px solid var(--ink);border-radius:6px;background:var(--grow-soft);padding:11px 15px;margin-bottom:14px;display:flex;gap:12px;align-items:flex-start}
   .season-band .leaf{font-size:20px;line-height:1}
@@ -409,7 +416,29 @@ function deliveryBand(dateStr){
   const body='What to expect: '+bits.join('; ')+'.';
   const stats=`<span class="stat"><b>Feels</b> ${minT}°–${maxT}°F</span><span class="stat"><b>Rain</b> ${pop}% · ${rain.toFixed(2)}"</span><span class="stat"><b>Gusts</b> ${gust} mph</span>`;
   return `<div class="band ${status}"><div class="bh"><span class="status ${status}">${status}</span><span class="bt">Restaurant Deliveries</span><span class="win">${DOWLONG[new Date(dateStr+'T12:00').getDay()]} · ~7A–4P routes</span></div>
-    <div class="bbody">${body}</div><div class="bstats">${stats}</div></div>`;
+    <div class="bbody">${body}</div><div class="bstats">${stats}</div>${deliveryChartSVG(w)}</div>`;
+}
+function deliveryChartSVG(hrs){
+  const N=hrs.length; if(!N) return '';
+  const W=340,H=134,padL=30,padR=12,padB=20;
+  const plotW=W-padL-padR, x0=padL, y0=H-padB, plotTop=26, plotH=y0-plotTop;
+  const temps=hrs.map(h=>h.temp), pops=hrs.map(h=>h.pop);
+  let tMin=Math.min(...temps), tMax=Math.max(...temps);
+  if(tMax-tMin<6){tMax+=3;tMin-=3;}else{tMax+=2;tMin-=2;}
+  const xAt=i=>x0+(N===1?plotW/2:(i/(N-1))*plotW);
+  const yT=t=>y0-((t-tMin)/(tMax-tMin))*plotH;
+  const bw=Math.max(3,plotW/N*0.5);
+  const bars=hrs.map((h,i)=>{ if(h.pop<5) return ''; const bh=(h.pop/100)*plotH*0.62; return `<rect x="${(xAt(i)-bw/2).toFixed(1)}" y="${(y0-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="1.5" fill="var(--sky)" opacity="0.30"/>`; }).join('');
+  const pts=hrs.map((h,i)=>`${xAt(i).toFixed(1)},${yT(h.temp).toFixed(1)}`).join(' ');
+  const dots=hrs.map((h,i)=>`<circle cx="${xAt(i).toFixed(1)}" cy="${yT(h.temp).toFixed(1)}" r="1.9" fill="var(--rust)"/>`).join('');
+  const xl=[0,3,6,9].filter(i=>i<N).map(i=>`<text x="${xAt(i).toFixed(1)}" y="${H-6}" text-anchor="middle" class="cx">${fmtHour(hrs[i].hr)}</text>`).join('');
+  const yl=`<text x="${padL-4}" y="${(yT(tMax)+3).toFixed(1)}" text-anchor="end" class="cy">${Math.round(tMax)}°</text><text x="${padL-4}" y="${(yT(tMin)+3).toFixed(1)}" text-anchor="end" class="cy">${Math.round(tMin)}°</text>`;
+  const maxPop=Math.max(...pops);
+  return `<div class="dchart"><div class="dchart-lg"><span><i class="tl"></i> temp °F</span><span><i class="pl"></i> rain chance ${maxPop>=5?`· peak ${maxPop}%`:'· none'}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" class="dsvg" role="img" aria-label="Temperature and rain chance across the delivery window">
+      <line x1="${x0}" y1="${y0}" x2="${W-padR}" y2="${y0}" stroke="var(--line)" stroke-width="1"/>
+      ${bars}<polyline points="${pts}" fill="none" stroke="var(--rust)" stroke-width="1.6" stroke-linejoin="round"/>${dots}${yl}${xl}
+    </svg></div>`;
 }
 
 /* ===================== RENDER HELPERS ===================== */
@@ -507,7 +536,7 @@ function render(){
     if(dow===1) mods.push({on:true,label:'MON · MARKET'},{on:true,label:'5-DAY'});
     if(dow===3) mods.push({on:true,label:'WED · RECEIVING + ROUTE'});
     if(dow===4) mods.push({on:true,label:'THU · DELIVERIES'});
-    if(dow===5) mods.push({on:true,label:'FRI · DELIVERIES + WEEKEND'});
+    if(dow===5) mods.push({on:true,label:'FRI · DELIVERIES'});
   }
   document.getElementById('modStrip').innerHTML=mods.map((m,i)=>`${i?'<span class="sep">/</span>':''}<span class="mod-flag ${m.on?'on':''}"><span class="dot"></span>${m.label}</span>`).join('');
 
@@ -546,10 +575,6 @@ function render(){
 
   // 6 5-day (Mon)
   if(dow===1){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>5-Day Outlook</h2><span class="sub">both stations · week ahead</span></div><div class="rule"></div>${dailyBlock(s=>dayIndex(s,dateStr),5)}</section>`; }
-
-  // 7 weekend read-ahead (Fri)
-  if(dow===5){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Weekend Read-Ahead</h2><span class="sub">Sat–Sun · not posted</span></div><div class="rule"></div>${dailyBlock(s=>dayIndex(s,dateStr)+1,2)}
-    <div class="weekend-note">Weekend briefings aren\u2019t posted, but the Sat/Sun forecast is viewable anytime from the day strip above — including the Saturday farmers market read.</div></section>`; }
 
   c.innerHTML=html;
   requestAnimationFrame(afterRender);
