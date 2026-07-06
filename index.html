@@ -54,13 +54,21 @@
 
   .mast-ctrl{display:flex;align-items:center;gap:8px;padding:11px 18px;flex-wrap:wrap}
   .ctrl-lab{font-family:'IBM Plex Mono';font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-soft);margin-right:2px}
-  .seg{display:inline-flex;border:1.2px solid var(--ink);border-radius:5px;overflow:hidden}
-  .seg button{font-family:'IBM Plex Mono';font-size:11.5px;font-weight:500;letter-spacing:.5px;padding:6px 10px;border:none;background:var(--card);color:var(--ink-soft);cursor:pointer;border-right:1px solid var(--line)}
-  .seg button:last-child{border-right:none}
-  .seg button.active{background:var(--pine);color:#F3F6EC;font-weight:600}
-  .seg button:hover:not(.active){background:var(--paper-2);color:var(--ink)}
-  .seg button.wknd{color:#9AA88C}
-  .seg button.wknd.active{background:var(--ink-soft)}
+  .seg{display:flex;flex:1 1 auto;min-width:0;gap:6px;overflow-x:auto;padding-bottom:3px}
+  .seg::-webkit-scrollbar{height:6px}.seg::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+  .seg .dbtn{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:62px;font-family:'IBM Plex Mono';padding:5px 9px;border:1.2px solid var(--ink);border-radius:6px;background:var(--card);color:var(--ink-soft);cursor:pointer}
+  .seg .dbtn .dwk{font-size:11px;font-weight:600;letter-spacing:.5px}
+  .seg .dbtn .ddt{font-size:9px;letter-spacing:.2px}
+  .seg .dbtn .dtd{font-size:7px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);font-weight:600;line-height:1}
+  .seg .dbtn .dfc{display:flex;flex-direction:column;width:100%;margin-top:3px;padding-top:3px;border-top:1px solid var(--line-2)}
+  .seg .dbtn.active .dfc{border-top-color:rgba(243,246,236,.25)}
+  .seg .dbtn .dline{font-size:8px;letter-spacing:0;white-space:nowrap;line-height:1.45}
+  .seg .dbtn .dline b{font-weight:600;opacity:.6;margin-right:2px}
+  .seg .dbtn.active{background:var(--pine);color:#F3F6EC}
+  .seg .dbtn.active .dtd{color:var(--gold-soft)}
+  .seg .dbtn:hover:not(.active){background:var(--paper-2);color:var(--ink)}
+  .seg .dbtn.wknd{border-style:dashed;color:#8A9A7C}
+  .seg .dbtn.wknd.active{background:var(--ink-soft);color:#F3F6EC}
   .refresh{margin-left:auto;font-family:'IBM Plex Mono';font-size:11px;letter-spacing:.5px;border:1.2px solid var(--ink);background:var(--gold-soft);color:var(--ink);border-radius:5px;padding:6px 12px;cursor:pointer}
   .refresh:hover{background:var(--gold)}
 
@@ -182,7 +190,7 @@
     </div>
     <div class="mast-strip" id="modStrip"></div>
     <div class="mast-ctrl">
-      <span class="ctrl-lab">Preview</span>
+      <span class="ctrl-lab">Forecast day</span>
       <div class="seg" id="daySeg"></div>
       <button class="refresh mono" id="refreshBtn">↻ REFRESH</button>
     </div>
@@ -235,14 +243,14 @@ function heatItems(m){ if(m>=3&&m<=5) return 'strawberries, spring greens, herbs
 function splitItems(m){ if(m===3||m===4) return 'strawberries and tender greens'; if(m>=5&&m<=7) return 'blueberries, blackberries, and ripe tomatoes'; if(m>=8&&m<=9) return 'late tomatoes, melons, and soft fruit'; return 'ripe fruit and greens'; }
 function frostItems(m){ if(m>=9&&m<=11) return 'the last of the tomatoes, peppers, squash, and tender greens'; if(m<=4) return 'early strawberries, blooms, and spring transplants'; return 'tender field crops'; }
 
-let RAW={}, ROUTE_DATA=null, previewOffset=null;
+let RAW={}, ROUTE_DATA=null, dayOffset=0;
 
 async function getSeries(lat,lon){
   const p=new URLSearchParams({latitude:lat,longitude:lon,
     hourly:'temperature_2m,apparent_temperature,precipitation_probability,precipitation,weathercode,wind_speed_10m,wind_gusts_10m,relative_humidity_2m',
     daily:'temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,weathercode,wind_gusts_10m_max',
-    temperature_unit:'fahrenheit',wind_speed_unit:'mph',precipitation_unit:'inch',timezone:'America/New_York',past_days:5,forecast_days:7});
-  const r=await fetch('https://api.open-meteo.com/v1/forecast?'+p.toString());
+    temperature_unit:'fahrenheit',wind_speed_unit:'mph',precipitation_unit:'inch',timezone:'America/New_York',past_days:5,forecast_days:12});
+  const r=await fetch('https://api.open-meteo.com/v1/forecast?'+p.toString()+'&_='+Date.now(),{cache:'no-store'});
   if(!r.ok) throw new Error('station '+r.status);
   return r.json();
 }
@@ -250,8 +258,7 @@ const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const DOW=['SUN','MON','TUE','WED','THU','FRI','SAT'], DOWLONG=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function briefingDate(){ const now=new Date(); if(previewOffset===null) return now;
-  for(let i=0;i<7;i++){ const d=new Date(now); d.setDate(now.getDate()+i); if(d.getDay()===previewOffset) return d; } return now; }
+function briefingDate(){ const d=new Date(); if(dayOffset>0) d.setDate(d.getDate()+dayOffset); return d; }
 function hoursFor(series,dateStr,h0,h1){ const H=series.hourly,out=[];
   for(let i=0;i<H.time.length;i++){ const t=H.time[i]; if(!t.startsWith(dateStr))continue; const hr=+t.slice(11,13); if(hr<h0||hr>h1)continue;
     out.push({hr,temp:Math.round(H.temperature_2m[i]),feels:Math.round(H.apparent_temperature[i]),pop:H.precipitation_probability[i]||0,precip:H.precipitation[i]||0,code:H.weathercode[i],wind:Math.round(H.wind_speed_10m[i]),gust:Math.round(H.wind_gusts_10m[i]),rh:H.relative_humidity_2m[i]}); }
@@ -368,17 +375,57 @@ function farmersMarketBand(dateStr){
     <div class="bbody">${body}</div><div class="bstats">${stats}</div></div>`;
 }
 
+/* ===================== WEDNESDAY RECEIVING DAY (hub intake, ~7A–2P) ===================== */
+function receivingBand(dateStr){
+  const w=hoursFor(RAW.hq,dateStr,8,17); if(!w.length) return '';
+  let rain=0,maxT=-999,pop=0,storm=false,heavy=false;
+  w.forEach(h=>{rain+=h.precip;maxT=Math.max(maxT,h.temp);pop=Math.max(pop,h.pop);if(STORMS.includes(h.code))storm=true;if(HEAVY.includes(h.code)||h.precip>=0.15)heavy=true;});
+  let status='good',bits=[];
+  if(storm){status='concern';bits.push('storms during intake — farm trucks may run late; keep the dock covered and stage cold storage for a compressed unload');}
+  else if(heavy||pop>=55){status='watch';bits.push(`rain likely (${pop}%) — product arrives wet, so QC moisture-sensitive lines harder and move them into cold storage fast`);}
+  else if(pop>=35){bits.push(`some rain risk (${pop}%) — have covered dock space ready`);}
+  if(maxT>=90){status=status==='good'?'watch':status;bits.push(`warm dock (${maxT}°F) — minimize dock dwell time and cool incoming produce quickly to hold shelf life`);}
+  const body=bits.length?('Receiving notes: '+bits.join('; ')+'. The Greenville run detail is below.'):'Dry and mild through intake — clean conditions for unload and QC. Greenville route detail below.';
+  const stats=`<span class="stat"><b>Peak</b> ${maxT}°F</span><span class="stat"><b>Rain</b> ${pop}% · ${rain.toFixed(2)}"</span>`;
+  return `<div class="band ${status}"><div class="bh"><span class="status ${status}">${status}</span><span class="bt">Receiving Day</span><span class="win">Wed · hub intake ~8A–5P</span></div>
+    <div class="bbody">${body}</div><div class="bstats">${stats}</div></div>`;
+}
+
+/* ===================== THU/FRI RESTAURANT DELIVERIES (~7A–4P routes) ===================== */
+function deliveryBand(dateStr){
+  const w=hoursFor(RAW.hq,dateStr,7,16); if(!w.length) return '';
+  let rain=0,maxT=-999,minT=999,pop=0,gust=0,storm=false,heavy=false,fog=false;
+  w.forEach(h=>{rain+=h.precip;maxT=Math.max(maxT,h.temp);minT=Math.min(minT,h.temp);pop=Math.max(pop,h.pop);gust=Math.max(gust,h.gust);if(STORMS.includes(h.code))storm=true;if(HEAVY.includes(h.code)||h.precip>=0.15)heavy=true;if([45,48].includes(h.code))fog=true;});
+  let status='good',bits=[];
+  if(storm){status='concern';bits.push(`thunderstorms likely during the route window (${pop}%) — downpours and low visibility possible`);}
+  else if(heavy||pop>=55){status='watch';bits.push(`rain likely (${pop}%) through much of the route window`);}
+  else if(pop>=35){bits.push(`scattered rain possible (${pop}%)`);}
+  else {bits.push('dry through the route window');}
+  bits.push(`temps ${minT}–${maxT}°F${maxT>=90?' (hot afternoon)':(minT<=34?' (freezing early)':'')}`);
+  if(minT<=34)bits.push('icy patches possible on the first stops');
+  if(fog)bits.push('morning fog on early stops');
+  if(gust>=25)bits.push(`gusty at times (to ${gust} mph)`);
+  if(status==='good'&&(minT<=34||maxT>=95))status='watch';
+  const body='What to expect: '+bits.join('; ')+'.';
+  const stats=`<span class="stat"><b>Feels</b> ${minT}°–${maxT}°F</span><span class="stat"><b>Rain</b> ${pop}% · ${rain.toFixed(2)}"</span><span class="stat"><b>Gusts</b> ${gust} mph</span>`;
+  return `<div class="band ${status}"><div class="bh"><span class="status ${status}">${status}</span><span class="bt">Restaurant Deliveries</span><span class="win">${DOWLONG[new Date(dateStr+'T12:00').getDay()]} · ~7A–4P routes</span></div>
+    <div class="bbody">${body}</div><div class="bstats">${stats}</div></div>`;
+}
+
 /* ===================== RENDER HELPERS ===================== */
 function renderHourly(hrs){ return hrs.map(h=>{const [lab,ic]=wmo(h.code);const cls=h.temp>=90?'warm':(h.temp<=34?'cold':'');const pop=h.pop>=15?`<div class="pop">${h.pop}%</div>`:`<div class="pop dry">·</div>`;const wind=h.gust>=25?`<div class="wnd">g${h.gust}</div>`:`<div class="wnd">${h.wind}mph</div>`;
-  return `<div class="hr ${cls}" title="${lab} · feels ${h.feels}° · RH ${h.rh}%"><div class="time">${fmtHour(h.hr)}</div><div class="ic">${ic}</div><div class="tmp">${h.temp}°</div>${pop}${wind}</div>`;}).join(''); }
-function stationCard(key,dateStr){ const loc=LOCATIONS[key],s=RAW[key],hrs=hoursFor(s,dateStr,7,17);
+  return `<div class="hr ${cls}" data-hr="${h.hr}" title="${lab} · feels ${h.feels}° · RH ${h.rh}%"><div class="time">${fmtHour(h.hr)}</div><div class="ic">${ic}</div><div class="tmp">${h.temp}°</div>${pop}${wind}</div>`;}).join(''); }
+function stationCard(key,dateStr,isToday){ const loc=LOCATIONS[key],s=RAW[key],hrs=hoursFor(s,dateStr,0,23);
   if(!hrs.length) return `<div class="station"><div class="st-head"><div class="st-id"><span class="st-code">${loc.code}</span><span class="st-name">${loc.name}</span></div></div><div style="padding:18px" class="mono">No hourly data for this date.</div></div>`;
-  const di=dayIndex(s,dateStr),d=dailyAt(s,di),nowH=hrs.find(h=>h.hr===new Date().getHours())||hrs[0],[nlab,nic]=wmo(nowH.code);
+  const di=dayIndex(s,dateStr),d=dailyAt(s,di),curHr=new Date().getHours();
+  const anchor=isToday?curHr:6;
+  const readH=isToday?(hrs.find(h=>h.hr===curHr)||hrs[0]):(hrs.find(h=>h.hr===12)||hrs[Math.floor(hrs.length/2)]);
+  const [nlab,nic]=wmo(readH.code);
   const maxT=Math.max(...hrs.map(h=>h.temp)),minT=Math.min(...hrs.map(h=>h.temp)),totPop=Math.max(...hrs.map(h=>h.pop));
   return `<div class="station"><div class="st-head"><div class="st-id"><span class="st-code">${loc.code}</span><span class="st-name">${loc.name}<small>ZIP ${loc.zip} · ${loc.region==='mountains'?'Blue Ridge · NC':'Piedmont · HQ'}</small></span></div>
-    <div class="st-now"><div class="big">${nic} ${nowH.temp}°</div><div class="sm">${nlab}</div></div></div>
-    <div class="hourly">${renderHourly(hrs)}</div>
-    <div class="st-foot"><span><b>Day</b> ${d?d.hi:maxT}° / ${d?d.lo:minT}°</span><span><b>Window hi/lo</b> ${maxT}° / ${minT}°</span><span><b>Rain</b> ${totPop}% · ${d?d.psum.toFixed(2):'—'}"</span><span><b>Gusts</b> ${d?d.gust:Math.max(...hrs.map(h=>h.gust))} mph</span></div></div>`; }
+    <div class="st-now"><div class="big">${nic} ${readH.temp}°</div><div class="sm">${nlab} · ${isToday?'now':'midday'}</div></div></div>
+    <div class="hourly" data-anchor="${anchor}">${renderHourly(hrs)}</div>
+    <div class="st-foot"><span><b>Day</b> ${d?d.hi:maxT}° / ${d?d.lo:minT}°</span><span><b>Rain</b> ${totPop}% · ${d?d.psum.toFixed(2):'—'}"</span><span><b>Gusts</b> ${d?d.gust:Math.max(...hrs.map(h=>h.gust))} mph</span><span style="color:var(--ink-soft)">↔ scroll full 24h</span></div></div>`; }
 function noteCard(n){ return `<div class="note ${n.sev}"><div class="nh"><span class="chip">${n.sev==='info'?'CLEAR':n.sev.toUpperCase()}</span><span class="region">${n.region.toUpperCase()}</span></div><div class="nt">${n.title}</div><div class="nb">${n.body}</div></div>`; }
 function dailyCells(s,start,count){ let out=''; for(let k=0;k<count;k++){const d=dailyAt(s,start+k);if(!d)continue;const [lab,ic]=wmo(d.code);const dd=new Date(d.date+'T12:00');
   out+=`<div class="dcell"><div class="dow">${DOW[dd.getDay()]}</div><div class="dt">${MON[dd.getMonth()]} ${dd.getDate()}</div><div class="dic">${ic}</div><div class="dtemp">${d.hi}° <span class="lo">${d.lo}°</span></div><div class="dp">${d.pop>=15?d.pop+'%':'—'}</div><div class="dlab">${lab}</div></div>`;}
@@ -404,8 +451,8 @@ async function initRadar(){
   const div=document.getElementById('radarMap'); if(!div) return;
   if(typeof L==='undefined'){ setTimeout(initRadar,300); return; }
   cleanupRadar();
-  const map=L.map('radarMap',{zoomControl:true,scrollWheelZoom:false}).setView([35.15,-81.30],7);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:11,attribution:'© OpenStreetMap © CARTO'}).addTo(map);
+  const map=L.map('radarMap',{zoomControl:true,scrollWheelZoom:false,maxZoom:18}).setView([35.15,-81.30],7);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19,attribution:'© OpenStreetMap © CARTO'}).addTo(map);
   const mk=(la,lo,lab,fill)=>L.circleMarker([la,lo],{radius:7,color:'#1B2417',weight:2,fillColor:fill,fillOpacity:1}).addTo(map).bindTooltip(lab,{direction:'top'});
   mk(LOCATIONS.hq.lat,LOCATIONS.hq.lon,'CLT·HQ (28205)','#B7891F');
   mk(LOCATIONS.rmt.lat,LOCATIONS.rmt.lon,'FVW·NC (28730)','#4E7A3A');
@@ -416,7 +463,7 @@ async function initRadar(){
   if(!data){ try{ const r=await fetch('https://api.rainviewer.com/public/weather-maps.json'); data=await r.json(); window.__rvFrames=data; }catch(e){ const t=document.getElementById('radarTime'); if(t)t.textContent='radar feed unavailable'; return; } }
   if(!document.getElementById('radarMap')) return; // re-rendered away
   const host=data.host, past=data.radar.past||[], now=data.radar.nowcast||[], frames=[...past,...now];
-  const layers=frames.map(f=>L.tileLayer(`${host}${f.path}/256/{z}/{x}/{y}/4/1_1.png`,{opacity:0,zIndex:5}));
+  const layers=frames.map(f=>L.tileLayer(`${host}${f.path}/256/{z}/{x}/{y}/4/1_1.png`,{opacity:0,zIndex:5,maxNativeZoom:11,maxZoom:18}));
   layers.forEach(l=>l.addTo(map));
   window.__radar.layers=layers; window.__radar.frames=frames;
   const nPast=past.length;
@@ -429,45 +476,62 @@ async function initRadar(){
 }
 
 /* ===================== MASTER RENDER ===================== */
-function hourlySectionHTML(numStr,dateStr,dow,d){
-  return `<section><div class="sec-head"><span class="sec-num mono">${numStr}</span><h2>Hourly · 7A–5P</h2><span class="sub">${DOWLONG[dow]} · ${MON[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}</span></div><div class="rule"></div>
-    <div class="stations">${stationCard('hq',dateStr)}${stationCard('rmt',dateStr)}</div></section>`;
+function hourlySectionHTML(numStr,dateStr,dow,d,isToday){
+  return `<section><div class="sec-head"><span class="sec-num mono">${numStr}</span><h2>Hourly · 24-hour</h2><span class="sub">${DOWLONG[dow]} · ${MON[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}${isToday?' · today':''}</span></div><div class="rule"></div>
+    <div class="stations">${stationCard('hq',dateStr,isToday)}${stationCard('rmt',dateStr,isToday)}</div></section>`;
 }
 function radarSectionHTML(numStr){
   return `<section><div class="sec-head"><span class="sec-num mono">${numStr}</span><h2>Regional Radar</h2><span class="sub">live loop · Piedmont → Upstate</span></div><div class="rule"></div>
     <div class="radar-wrap"><div id="radarMap"></div><div class="radar-bar"><button id="radarPlay" class="radar-btn mono">⏸ PAUSE</button><span class="radar-time mono" id="radarTime">loading…</span><span class="radar-legend"><i class="l1"></i>light<i class="l2"></i>mod<i class="l3"></i>heavy<i class="l4"></i>storm</span></div></div></section>`;
 }
+function positionHourly(){
+  document.querySelectorAll('.hourly[data-anchor]').forEach(cont=>{
+    const a=+cont.dataset.anchor, cell=cont.querySelector(`.hr[data-hr="${a}"]`);
+    if(cell) cont.scrollLeft=Math.max(0,cell.offsetLeft-8);
+  });
+}
+function afterRender(){ initRadar(); positionHourly(); }
 function render(){
   cleanupRadar();
   const d=briefingDate(),dateStr=ymd(d),dow=d.getDay(),isWeekend=(dow===0||dow===6);
+  const isToday=(dateStr===ymd(new Date()));
   const c=document.getElementById('content');
   let html='',n=1; const num=()=>String(n++).padStart(2,'0');
 
   let mods;
   if(isWeekend){ mods=[{on:true,label:'HOURLY'},{on:dow===6,label:'SAT · MARKET'},{on:true,label:'RADAR'}]; }
-  else { mods=[{on:true,label:'HOURLY'},{on:true,label:'HARVEST'},{on:true,label:'SUPPLY'},{on:true,label:'RADAR'},
-    {on:dow===1,label:'MON · MARKET+5DAY'},{on:dow===3,label:'WED · ROUTE'},{on:dow===5,label:'FRI · WEEKEND'}]; }
+  else {
+    mods=[{on:true,label:'HOURLY'}];
+    if(dow===2||dow===3) mods.push({on:true,label:'HARVEST'});
+    mods.push({on:true,label:'SUPPLY'},{on:true,label:'RADAR'});
+    if(dow===1) mods.push({on:true,label:'MON · MARKET'},{on:true,label:'5-DAY'});
+    if(dow===3) mods.push({on:true,label:'WED · RECEIVING + ROUTE'});
+    if(dow===4) mods.push({on:true,label:'THU · DELIVERIES'});
+    if(dow===5) mods.push({on:true,label:'FRI · DELIVERIES + WEEKEND'});
+  }
   document.getElementById('modStrip').innerHTML=mods.map((m,i)=>`${i?'<span class="sep">/</span>':''}<span class="mod-flag ${m.on?'on':''}"><span class="dot"></span>${m.label}</span>`).join('');
 
   /* ---- Weekend: real forecast, reference only (not posted) ---- */
   if(isWeekend){
     html+=`<div class="weekend-note" style="margin-top:26px">Weekend forecast — <b>reference only, not posted</b>. Briefings publish Monday–Friday; this view is here for planning.</div>`;
-    html+=hourlySectionHTML(num(),dateStr,dow,d);
+    html+=hourlySectionHTML(num(),dateStr,dow,d,isToday);
     if(dow===6){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Saturday Farmers Market</h2><span class="sub">outdoor · ~8A–12P</span></div><div class="rule"></div>${farmersMarketBand(dateStr)}</section>`; }
     html+=radarSectionHTML(num());
-    c.innerHTML=html; requestAnimationFrame(initRadar); return;
+    c.innerHTML=html; requestAnimationFrame(afterRender); return;
   }
 
   const {tue,wed}=weekTueWed(d);
 
   // 1 hourly
-  html+=hourlySectionHTML(num(),dateStr,dow,d);
+  html+=hourlySectionHTML(num(),dateStr,dow,d,isToday);
 
-  // 2 market (Mon, indoor / attendance)
-  if(dow===1){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Market Day</h2><span class="sub">indoor market · today 2–6P</span></div><div class="rule"></div>${marketBand(dateStr)}</section>`; }
+  // 2 day-specific ops callout
+  if(dow===1){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Market Day</h2><span class="sub">indoor market · 2–6P</span></div><div class="rule"></div>${marketBand(dateStr)}</section>`; }
+  if(dow===3){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Receiving Day + Greenville Route</h2><span class="sub">hub intake · I-85 round trip</span></div><div class="rule"></div>${receivingBand(dateStr)}<div style="height:12px"></div>${routeSection(dateStr)}</section>`; }
+  if(dow===4||dow===5){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Restaurant Deliveries</h2><span class="sub">${DOWLONG[dow]} · route conditions</span></div><div class="rule"></div>${deliveryBand(dateStr)}</section>`; }
 
-  // 3 harvest window
-  html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Harvest Window</h2><span class="sub">bulk pick · Tue PM → Wed PM</span></div><div class="rule"></div>${harvestBand(dateStr,dow,tue,wed)}</section>`;
+  // 3 harvest window (Tue/Wed only — post-harvest quality carries into Supply & Quality Watch)
+  if(dow===2||dow===3){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Harvest Window</h2><span class="sub">bulk pick · Tue PM → Wed PM</span></div><div class="rule"></div>${harvestBand(dateStr,dow,tue,wed)}</section>`; }
 
   // 4 supply & quality watch
   const month=d.getMonth(),[sName,sBody]=CROP_CAL[month];
@@ -480,18 +544,15 @@ function render(){
   // 5 radar
   html+=radarSectionHTML(num());
 
-  // 6 route (Wed)
-  if(dow===3){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Route · Charlotte ⇄ Greenville, SC</h2><span class="sub">I-85 · 10A–4P round trip</span></div><div class="rule"></div>${routeSection(dateStr)}</section>`; }
-
-  // 7 5-day (Mon)
+  // 6 5-day (Mon)
   if(dow===1){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>5-Day Outlook</h2><span class="sub">both stations · week ahead</span></div><div class="rule"></div>${dailyBlock(s=>dayIndex(s,dateStr),5)}</section>`; }
 
-  // 8 weekend read-ahead (Fri)
+  // 7 weekend read-ahead (Fri)
   if(dow===5){ html+=`<section><div class="sec-head"><span class="sec-num mono">${num()}</span><h2>Weekend Read-Ahead</h2><span class="sub">Sat–Sun · not posted</span></div><div class="rule"></div>${dailyBlock(s=>dayIndex(s,dateStr)+1,2)}
-    <div class="weekend-note">Weekend briefings aren\u2019t posted, but the Sat/Sun forecast is viewable anytime via <b>Preview</b> — including the Saturday farmers market read.</div></section>`; }
+    <div class="weekend-note">Weekend briefings aren\u2019t posted, but the Sat/Sun forecast is viewable anytime from the day strip above — including the Saturday farmers market read.</div></section>`; }
 
   c.innerHTML=html;
-  requestAnimationFrame(initRadar);
+  requestAnimationFrame(afterRender);
 }
 
 /* ===================== BOOT / CONTROLS ===================== */
@@ -502,16 +563,29 @@ async function loadAll(){
     RAW.hq=hq; RAW.rmt=rmt;
     ROUTE_DATA=await Promise.all(ROUTE.map(w=>getSeries(w.lat,w.lon)));
     document.getElementById('lastFetch').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    render();
+    render(); decorateDaySeg();
   }catch(e){ c.innerHTML=`<div class="errbox" style="margin-top:26px">Couldn\u2019t reach the weather service — ${e.message}. Check the connection and hit ↻ REFRESH.</div>`; }
 }
 function buildDaySeg(){
-  const seg=document.getElementById('daySeg');
-  const opts=[['Today',null],['Mon',1],['Tue',2],['Wed',3],['Thu',4],['Fri',5],['Sat',6],['Sun',0]];
-  seg.innerHTML=opts.map(([lab,val])=>`<button class="${val===6||val===0?'wknd':''}" data-v="${val}">${lab}</button>`).join('');
-  const setActive=()=>[...seg.children].forEach(b=>{const v=b.dataset.v==='null'?null:+b.dataset.v;b.classList.toggle('active',v===previewOffset);});
-  seg.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;previewOffset=b.dataset.v==='null'?null:+b.dataset.v;setActive();if(RAW.hq)render();});
-  setActive();
+  const seg=document.getElementById('daySeg'), now=new Date(); let html='';
+  for(let i=0;i<10;i++){ const dd=new Date(now); dd.setDate(now.getDate()+i);
+    const wknd=(dd.getDay()===0||dd.getDay()===6);
+    html+=`<button class="dbtn ${wknd?'wknd':''}" data-off="${i}"><span class="dwk">${DOW[dd.getDay()]}</span><span class="ddt">${MON[dd.getMonth()]} ${dd.getDate()}</span>${i===0?'<span class="dtd">today</span>':''}<span class="dfc"></span></button>`;
+  }
+  seg.innerHTML=html;
+  const setActive=()=>[...seg.children].forEach(b=>b.classList.toggle('active',+b.dataset.off===dayOffset));
+  seg.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;dayOffset=+b.dataset.off;setActive();if(RAW.hq)render();});
+  setActive(); decorateDaySeg();
+}
+function decorateDaySeg(){
+  if(!RAW.hq||!RAW.rmt) return;
+  const now=new Date();
+  document.querySelectorAll('#daySeg .dbtn').forEach(b=>{
+    const i=+b.dataset.off, dd=new Date(now); dd.setDate(now.getDate()+i); const ds=ymd(dd);
+    const el=b.querySelector('.dfc'); if(!el) return;
+    const line=(key,lab)=>{ const d=dailyAt(RAW[key],dayIndex(RAW[key],ds)); if(!d) return `<span class="dline"><b>${lab}</b> —</span>`; const [,ic]=wmo(d.code); return `<span class="dline"><b>${lab}</b> ${ic} ${d.lo}/${d.hi}</span>`; };
+    el.innerHTML=line('hq','CLT')+line('rmt','FVW');
+  });
 }
 function tickClock(){ const now=new Date();
   document.getElementById('clock').textContent=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
